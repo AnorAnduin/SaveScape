@@ -1,18 +1,28 @@
 import os
 import time
+import json
+from pathlib import Path
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 from datetime import datetime
 import shutil
 import dropbox
 
-# Configuration
-SAVE_STATE_DIR = "/path/to/pcsx2/sstates"  # Directory where PCSX2 saves states
-BACKUP_DIR = "/path/to/save_state_backups"  # Local backup directory
-DROPBOX_TOKEN = "your_dropbox_token"  # Your Dropbox API token for cloud sync
+# Load configuration from JSON file
+BASE_DIR = Path(__file__).resolve().parent
+with open(BASE_DIR / "config.json", "r") as config_file:
+    config = json.load(config_file)
 
-# Initialize Dropbox client
-dbx = dropbox.Dropbox(DROPBOX_TOKEN)
+# Set up directories and Dropbox token
+SAVE_STATE_DIR = BASE_DIR / config["SAVE_STATE_DIR"]
+BACKUP_DIR = BASE_DIR / config["BACKUP_DIR"]
+DROPBOX_TOKEN = config.get("DROPBOX_TOKEN")
+
+# Ensure the backup directory exists
+os.makedirs(BACKUP_DIR, exist_ok=True)
+
+# Initialize Dropbox client (optional)
+dbx = dropbox.Dropbox(DROPBOX_TOKEN) if DROPBOX_TOKEN else None
 
 class SaveStateHandler(FileSystemEventHandler):
     def on_created(self, event):
@@ -28,14 +38,15 @@ class SaveStateHandler(FileSystemEventHandler):
         file_name = os.path.basename(file_path)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         backup_name = f"{timestamp}_{file_name}"
-        backup_path = os.path.join(BACKUP_DIR, backup_name)
-        
+        backup_path = BACKUP_DIR / backup_name
+
         # Copy the file to the local backup directory
         shutil.copy(file_path, backup_path)
         print(f"Backed up save state to: {backup_path}")
 
-        # Upload to Dropbox
-        self.upload_to_dropbox(backup_path, backup_name)
+        # Upload to Dropbox if configured
+        if dbx:
+            self.upload_to_dropbox(backup_path, backup_name)
 
     def upload_to_dropbox(self, local_path, backup_name):
         with open(local_path, "rb") as f:
@@ -43,9 +54,6 @@ class SaveStateHandler(FileSystemEventHandler):
         print(f"Uploaded {backup_name} to Dropbox.")
 
 if __name__ == "__main__":
-    # Ensure the backup directory exists
-    os.makedirs(BACKUP_DIR, exist_ok=True)
-    
     # Set up and start the observer
     event_handler = SaveStateHandler()
     observer = Observer()
@@ -59,4 +67,3 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         observer.stop()
     observer.join()
-
