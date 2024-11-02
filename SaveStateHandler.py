@@ -6,23 +6,26 @@ from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 from datetime import datetime
 import shutil
-import dropbox
 
 # Load configuration from JSON file
 BASE_DIR = Path(__file__).resolve().parent
 with open(BASE_DIR / "config.json", "r") as config_file:
     config = json.load(config_file)
 
-# Set up directories and Dropbox token
+# Set up directories and Dropbox flag
 SAVE_STATE_DIR = BASE_DIR / config["SAVE_STATE_DIR"]
 BACKUP_DIR = BASE_DIR / config["BACKUP_DIR"]
+USE_DROPBOX = config.get("USE_DROPBOX", False)
 DROPBOX_TOKEN = config.get("DROPBOX_TOKEN")
+
+# Initialize Dropbox client if USE_DROPBOX is true
+dbx = None
+if USE_DROPBOX and DROPBOX_TOKEN:
+    import dropbox
+    dbx = dropbox.Dropbox(DROPBOX_TOKEN)
 
 # Ensure the backup directory exists
 os.makedirs(BACKUP_DIR, exist_ok=True)
-
-# Initialize Dropbox client (optional)
-dbx = dropbox.Dropbox(DROPBOX_TOKEN) if DROPBOX_TOKEN else None
 
 class SaveStateHandler(FileSystemEventHandler):
     def on_created(self, event):
@@ -44,8 +47,8 @@ class SaveStateHandler(FileSystemEventHandler):
         shutil.copy(file_path, backup_path)
         print(f"Backed up save state to: {backup_path}")
 
-        # Upload to Dropbox if configured
-        if dbx:
+        # Upload to Dropbox if USE_DROPBOX is enabled
+        if USE_DROPBOX and dbx:
             self.upload_to_dropbox(backup_path, backup_name)
 
     def upload_to_dropbox(self, local_path, backup_name):

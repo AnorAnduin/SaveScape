@@ -1,5 +1,6 @@
 {
     "SAVE_STATE_DIR": "pcsx2/sstates",
     "BACKUP_DIR": "backups",
+    "USE_DROPBOX": false,
     "DROPBOX_TOKEN": "your_dropbox_token"
 }
